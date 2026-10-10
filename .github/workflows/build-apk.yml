@@ -1,0 +1,61 @@
+name: Build Online Banking APK
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Verify ZIP exists
+        run: |
+          ls -lh
+          if [ ! -f "Online-Banking-demo-v1.2-source-1.zip" ]; then
+            echo "::error::ZIP manquant à la racine"
+            exit 1
+          fi
+
+      - name: Extract project
+        run: |
+          rm -rf source
+          unzip -o Online-Banking-demo-v1.2-source-1.zip -d source
+          find source -name "gradlew" -type f
+          ls -R source | head -n 200
+
+      - name: Setup Java 17
+        uses: actions/setup-java@v5
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+          cache: 'gradle'
+          cache-dependency-path: 'source/**/build.gradle*'
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      # On a supprimé gradle/actions/setup-gradle@v4 car c'est lui qui causait le fail de 6s
+      # Le wrapper va télécharger Gradle tout seul
+
+      - name: Build APK
+        run: |
+          PROJECT=$(find source -name gradlew -type f | head -n 1)
+          if [ -z "$PROJECT" ]; then
+            echo "::error::gradlew introuvable dans le ZIP"
+            exit 1
+          fi
+          DIR=$(dirname "$PROJECT")
+          echo "Gradle trouvé dans: $DIR"
+          chmod +x "$PROJECT"
+          cd "$DIR"
+          ./gradlew assembleDebug --no-daemon --stacktrace
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: Online-Banking-demo-APK
+          path: source/**/build/outputs/apk/debug/*.apk
+          if-no-files-found: error
