@@ -1,0 +1,62 @@
+name: Build Online Banking APK
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Setup Java 17
+        uses: actions/setup-java@v5
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+          cache: 'gradle'
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Verify ZIP exists
+        run: |
+          ls -la
+          if [ ! -f "Online-Banking-demo-v1.2-source-1.zip" ]; then
+            echo "::error::Le fichier Online-Banking-demo-v1.2-source-1.zip est introuvable à la racine"
+            echo "Assure-toi de l'avoir pushé dans le repo"
+            exit 1
+          fi
+
+      - name: Extract project
+        run: |
+          rm -rf source
+          unzip -o Online-Banking-demo-v1.2-source-1.zip -d source
+          echo "--- Contenu ---"
+          ls -R source | head -n 100
+          echo "--- Recherche gradlew ---"
+          find source -name gradlew -type f
+
+      - name: Build APK
+        run: |
+          PROJECT=$(find source -name gradlew -type f | head -n 1)
+          if [ -z "$PROJECT" ]; then
+            echo "::error::Gradle wrapper absent du ZIP - vérifie que c'est bien le source complet"
+            exit 1
+          fi
+          DIR=$(dirname "$PROJECT")
+          chmod +x "$PROJECT"
+          cd "$DIR"
+          ./gradlew assembleDebug --no-daemon --stacktrace
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: Online-Banking-demo-APK
+          path: source/**/build/outputs/apk/debug/*.apk
+          if-no-files-found: error
